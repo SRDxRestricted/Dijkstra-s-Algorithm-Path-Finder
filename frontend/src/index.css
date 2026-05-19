@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #0b0b0c;
+    color: #e4e4e7;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'SF Pro Display', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Custom Scrollbar for Medical Triage Feed */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #111113;
+}
+::-webkit-scrollbar-thumb {
+  background: #2d2d34;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #40404a;
+}
+
+/* Leaflet Map Custom Styling */
+.leaflet-container {
+  background: #0b0b0c !important;
+  font-family: 'Inter', -apple-system, sans-serif;
+}
+
+/* Medical Neon Path Animation */
+.neon-path {
+  stroke-dasharray: 6, 10;
+  animation: dash 35s linear infinite;
+  filter: drop-shadow(0 0 3px rgba(14, 165, 233, 0.6));
+}
+
+.neon-path-glowing {
+  filter: drop-shadow(0 0 8px rgba(14, 165, 233, 0.5)) drop-shadow(0 0 2px rgba(14, 165, 233, 0.3));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Minimalist Pulse Ring for Patients */
+.pulse-marker {
+  position: relative;
+}
+
+.pulse-marker::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.15);
+  animation: pulse-ring 2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  pointer-events: none;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.4);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: -1000;
+  }
+}
+
+/* Medical Premium Frosted Glass (Charcoal) */
+.glass-panel {
+  background: rgba(17, 17, 19, 0.8);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(228, 228, 231, 0.08);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+}
+
+/* Active Dispatch Accent */
+.active-card-shadow {
+  box-shadow: 0 0 15px rgba(14, 165, 233, 0.08);
+}
