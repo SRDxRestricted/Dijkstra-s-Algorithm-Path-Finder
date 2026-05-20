@@ -1,200 +1,147 @@
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Polyline, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
+import React, { useEffect, useRef, useState } from 'react';
+import { MapContainer, Marker, Polyline, Popup, TileLayer, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Shield, Play, RotateCcw, Activity, Navigation, HeartPulse, HelpCircle, MapPin, Truck } from 'lucide-react';
+import { HeartPulse, Navigation, Play, RotateCcw, Route, Truck } from 'lucide-react';
 
-// Controller to handle center/zoom dynamic changes
 function MapController({ center, zoom }) {
   const map = useMap();
+
   useEffect(() => {
     if (center) {
-      map.setView(center, zoom || 13);
+      map.flyTo(center, zoom || 15, { duration: 1.2 });
     }
   }, [center, zoom, map]);
+
   return null;
 }
 
-// Generate custom minimalist, crisp SVG icon based on node type and exploration state
-const createNodeIcon = (type, name, isCurrent, isVisited, isPathNode) => {
+const edgeKey = (from, to) => [from, to].sort().join('__');
+
+const formatWeight = (value) => {
+  if (!Number.isFinite(value)) return '--';
+  return Math.round(value * 10) / 10;
+};
+
+const createNodeIcon = (type, { isOnPath = false, isVisited = false, isCurrent = false, isFrontier = false } = {}) => {
   let bg = '#27272a';
-  let border = 'rgba(255, 255, 255, 0.25)';
-  let size = 12;
+  let border = 'rgba(255,255,255,0.15)';
+  let size = 10;
   let svgContent = '';
+  const classes = [];
 
   if (type === 'Ambulance') {
-    bg = '#0ea5e9'; // Cyan/Blue
+    bg = '#0ea5e9';
     border = '#ffffff';
-    size = 28;
-    svgContent = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="#ffffff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 22l10-6 10 6L12 2z"/></svg>`;
+    size = 26;
+    svgContent = `<svg viewBox="0 0 24 24" width="13" height="13" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 22l10-6 10 6L12 2z"/></svg>`;
   } else if (type === 'Patient') {
-    bg = '#ef4444'; // Red
+    bg = '#ef4444';
     border = '#ffffff';
-    size = 28;
-    svgContent = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="#ffffff" stroke-width="3" fill="none" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 7v10M7 12h10"/></svg>`;
+    size = 26;
+    classes.push('pulse-marker');
+    svgContent = `<svg viewBox="0 0 24 24" width="13" height="13" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 7v10M7 12h10"/></svg>`;
   } else if (type === 'Hospital') {
-    bg = '#10b981'; // Green
+    bg = '#10b981';
     border = '#ffffff';
-    size = 28;
-    svgContent = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="#ffffff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M12 8v8M8 12h8"/></svg>`;
+    size = 26;
+    svgContent = `<svg viewBox="0 0 24 24" width="13" height="13" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>`;
   } else if (type === 'Intersection') {
-    bg = isPathNode ? '#0ea5e9' : (isVisited ? '#71717a' : '#27272a');
-    border = isCurrent ? '#f59e0b' : 'rgba(255, 255, 255, 0.15)';
-    size = isCurrent ? 18 : 12;
+    if (isOnPath) {
+      bg = '#0ea5e9';
+      border = 'rgba(14,165,233,0.65)';
+      size = 12;
+    } else if (isVisited) {
+      bg = '#71717a';
+      border = 'rgba(228,228,231,0.45)';
+      size = 12;
+    }
   }
 
-  const pulseClass = (type === 'Patient') ? 'pulse-marker' : '';
+  if (isFrontier) {
+    border = '#f59e0b';
+    size = Math.max(size, 14);
+  }
+
+  if (isCurrent) {
+    bg = '#f59e0b';
+    border = '#ffffff';
+    size = Math.max(size, 18);
+    classes.push('dijkstra-current-marker');
+  }
 
   return L.divIcon({
-    html: `
-      <div class="${pulseClass}" style="
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: ${size}px;
-        height: ${size}px;
-        background: ${bg};
-        border: 2px solid ${border};
-        border-radius: 50%;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-        transition: all 0.2s ease;
-      ">
-        ${svgContent}
-      </div>
-    `,
+    html: `<div class="${classes.join(' ')}" style="
+      display:flex;align-items:center;justify-content:center;
+      width:${size}px;height:${size}px;
+      background:${bg};border:2px solid ${border};border-radius:50%;
+      box-shadow:0 2px 8px rgba(0,0,0,0.4);transition:all 0.3s ease;
+    ">${svgContent}</div>`,
     className: 'custom-leaflet-marker',
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2]
   });
 };
 
-// Custom Ambulance Driving Marker Icon (Clean Surgical Chevron)
-const createAmbulanceCarIcon = () => {
-  return L.divIcon({
-    html: `
-      <div style="
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 30px;
-        height: 30px;
-        background: #0ea5e9;
-        border: 2px solid #ffffff;
-        border-radius: 50%;
-        box-shadow: 0 0 12px rgba(14, 165, 233, 0.7), 0 0 3px rgba(14, 165, 233, 0.5);
-      ">
-        <svg viewBox="0 0 24 24" width="16" height="16" stroke="#ffffff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" class="animate-pulse">
-          <rect x="2" y="4" width="14" height="12" rx="2" />
-          <polygon points="16 6 22 10 22 16 16 16" />
-          <circle cx="6" cy="18" r="2" fill="#000" />
-          <circle cx="16" cy="18" r="2" fill="#000" />
-        </svg>
-      </div>
-    `,
-    className: 'custom-ambulance-car',
-    iconSize: [30, 30],
-    iconAnchor: [15, 15]
-  });
-};
+const ambulanceCarIcon = L.divIcon({
+  html: `<div style="
+    display:flex;align-items:center;justify-content:center;
+    width:28px;height:28px;background:#0ea5e9;
+    border:2px solid #fff;border-radius:50%;
+    box-shadow:0 0 14px rgba(14,165,233,0.7),0 0 4px rgba(14,165,233,0.5);
+  "><svg viewBox="0 0 24 24" width="14" height="14" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="4" width="14" height="12" rx="2"/>
+    <polygon points="16 6 22 10 22 16 16 16"/>
+    <circle cx="6" cy="18" r="2" fill="#000"/>
+    <circle cx="16" cy="18" r="2" fill="#000"/>
+  </svg></div>`,
+  className: 'custom-ambulance-car',
+  iconSize: [28, 28],
+  iconAnchor: [14, 14]
+});
 
-// DFS to find all simple paths
-function findSimplePaths(edges, start, end, maxDepth = 5) {
-  const adj = {};
-  edges.forEach(e => {
-    if (!adj[e.from]) adj[e.from] = [];
-    if (!adj[e.to]) adj[e.to] = [];
-    adj[e.from].push(e.to);
-    adj[e.to].push(e.from);
-  });
+const lerp = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 
-  const paths = [];
-  
-  function dfs(curr, target, visited, currentPath) {
-    if (currentPath.length > maxDepth) return;
-    if (curr === target) {
-      paths.push([...currentPath]);
-      return;
-    }
-    
-    const neighbors = adj[curr] || [];
-    for (const n of neighbors) {
-      if (!visited.has(n)) {
-        visited.add(n);
-        currentPath.push(n);
-        dfs(n, target, visited, currentPath);
-        currentPath.pop();
-        visited.delete(n);
-      }
-    }
+function getProgressAlongPath(coords, progress) {
+  if (coords.length < 2) return { trail: coords, head: coords[0] || null };
+
+  const segLens = [];
+  let totalLen = 0;
+  for (let i = 0; i < coords.length - 1; i += 1) {
+    const dx = coords[i + 1][0] - coords[i][0];
+    const dy = coords[i + 1][1] - coords[i][1];
+    const len = Math.sqrt(dx * dx + dy * dy);
+    segLens.push(len);
+    totalLen += len;
   }
-  
-  const visitedNodes = new Set([start]);
-  dfs(start, end, visitedNodes, [start]);
-  return paths;
+
+  const targetDist = progress * totalLen;
+  let accumulated = 0;
+  const trail = [coords[0]];
+
+  for (let i = 0; i < segLens.length; i += 1) {
+    if (accumulated + segLens[i] >= targetDist) {
+      const remaining = targetDist - accumulated;
+      const t = segLens[i] > 0 ? remaining / segLens[i] : 0;
+      const head = lerp(coords[i], coords[i + 1], t);
+      trail.push(head);
+      return { trail, head };
+    }
+    accumulated += segLens[i];
+    trail.push(coords[i + 1]);
+  }
+
+  return { trail: coords, head: coords[coords.length - 1] };
 }
 
-const interpolatePoints = (p1, p2, ratio) => {
-  return [
-    p1[0] + (p2[0] - p1[0]) * ratio,
-    p1[1] + (p2[1] - p1[1]) * ratio
-  ];
-};
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
 
-const getPathProgress = (pathNodeIds, nodeMap, edgeWeightMap, p) => {
-  const coords = pathNodeIds.map(id => {
-    const node = nodeMap[id];
-    return node ? [node.lat, node.lng] : null;
-  }).filter(Boolean);
-
-  if (coords.length < 2) return { coords: [], head: null, cost: 0, totalCost: 0 };
-  
-  const segments = [];
-  let totalW = 0;
-  for (let i = 0; i < pathNodeIds.length - 1; i++) {
-    const from = pathNodeIds[i];
-    const to = pathNodeIds[i+1];
-    const w = edgeWeightMap[`${from}-${to}`] || edgeWeightMap[`${to}-${from}`] || 1;
-    segments.push(w);
-    totalW += w;
-  }
-  
-  let cumulativeRatio = 0;
-  let activeCoords = [coords[0]];
-  let headPoint = coords[0];
-  let accumulatedCost = 0;
-  
-  for (let i = 0; i < segments.length; i++) {
-    const segmentRatio = segments[i] / totalW;
-    const startRatio = cumulativeRatio;
-    const endRatio = cumulativeRatio + segmentRatio;
-    
-    if (p <= endRatio) {
-      const segmentP = (p - startRatio) / segmentRatio;
-      const interp = interpolatePoints(coords[i], coords[i+1], segmentP);
-      activeCoords.push(interp);
-      headPoint = interp;
-      accumulatedCost += segments[i] * segmentP;
-      break;
-    } else {
-      activeCoords.push(coords[i+1]);
-      headPoint = coords[i+1];
-      accumulatedCost += segments[i];
-      cumulativeRatio = endRatio;
-    }
-  }
-  
-  return {
-    coords: activeCoords,
-    head: headPoint,
-    cost: accumulatedCost,
-    totalCost: totalW
-  };
-};
-
-export default function MapPanel({ 
-  nodes = [], 
-  edges = [], 
-  center = [51.505, -0.09], 
-  zoom = 13,
+export default function MapPanel({
+  nodes = [],
+  edges = [],
+  center = [51.505, -0.09],
+  zoom = 15,
   activePatient = null,
   routeResult = null,
   isAnimating = false,
@@ -202,254 +149,242 @@ export default function MapPanel({
   onReset = null,
   onAnimationComplete = null
 }) {
-  const [animatedAmbulancePos, setAnimatedAmbulancePos] = useState(null);
-  const [animationProgress, setAnimationProgress] = useState(0);
-  const [currentPhase, setCurrentPhase] = useState('Ambulance to Patient');
-  const [pathsToPatient, setPathsToPatient] = useState([]);
-  const [pathsToHospital, setPathsToHospital] = useState([]);
+  const [progress, setProgress] = useState(0);
+  const [phase, setPhase] = useState('idle');
+  const [scanStepIndex, setScanStepIndex] = useState(0);
 
-  // Compile edge weight map
-  const edgeWeightMap = {};
-  edges.forEach(e => {
-    edgeWeightMap[`${e.from}-${e.to}`] = e.weight;
-    edgeWeightMap[`${e.to}-${e.from}`] = e.weight;
-  });
+  const phaseRef = useRef('idle');
+  const onCompleteRef = useRef(onAnimationComplete);
+  useEffect(() => { onCompleteRef.current = onAnimationComplete; }, [onAnimationComplete]);
 
   const nodeMap = {};
-  nodes.forEach(n => {
-    nodeMap[n.id] = n;
-  });
+  nodes.forEach((node) => { nodeMap[node.id] = node; });
 
-  // Pre-calculate all simple paths for the selected patient
-  useEffect(() => {
-    if (!activePatient || !nodes.length || !edges.length) {
-      setPathsToPatient([]);
-      setPathsToHospital([]);
-      return;
-    }
+  const patientIdx = routeResult?.fullPath?.indexOf(activePatient?.id) ?? -1;
+  const seg1Ids = routeResult && patientIdx !== -1 ? routeResult.fullPath.slice(0, patientIdx + 1) : [];
+  const seg2Ids = routeResult && patientIdx !== -1 ? routeResult.fullPath.slice(patientIdx) : [];
 
-    const startNode = nodes.find(n => n.type === 'Ambulance')?.id || 'A';
-    const patientNode = activePatient.id;
-    const hospitalNode = nodes.find(n => n.type === 'Hospital' && n.name.includes(activePatient.targetHospital))?.id || 
-                         nodes.find(n => n.type === 'Hospital')?.id || 'H1';
+  const toCoords = (ids) => ids.map((id) => {
+    const node = nodeMap[id];
+    return node ? [node.lat, node.lng] : null;
+  }).filter(Boolean);
 
-    const patientPaths = findSimplePaths(edges, startNode, patientNode, 5);
-    const hospitalPaths = findSimplePaths(edges, patientNode, hospitalNode, 5);
+  const seg1Coords = toCoords(seg1Ids);
+  const seg2Coords = toCoords(seg2Ids);
+  const dijkstraSteps = routeResult?.steps || [];
 
-    setPathsToPatient(patientPaths);
-    setPathsToHospital(hospitalPaths);
-  }, [activePatient, nodes, edges]);
-
-  // Extract optimal segments from the solver result
-  const patientIndex = routeResult?.fullPath?.indexOf(activePatient?.id) ?? -1;
-  const optimalSegment1 = routeResult && patientIndex !== -1 ? routeResult.fullPath.slice(0, patientIndex + 1) : [];
-  const optimalSegment2 = routeResult && patientIndex !== -1 ? routeResult.fullPath.slice(patientIndex) : [];
-
-  // Manage two-phase requestAnimationFrame animation loop
   useEffect(() => {
     if (!isAnimating) {
-      setAnimationProgress(0);
-      setCurrentPhase('Ambulance to Patient');
-      return;
+      setProgress(0);
+      setScanStepIndex(0);
+      setPhase('idle');
+      phaseRef.current = 'idle';
+      return undefined;
     }
 
-    let startTimestamp = null;
-    const duration = 2400; // 2.4s per phase
-    let animId;
+    if (!routeResult) return undefined;
 
-    const step = (timestamp) => {
-      if (!startTimestamp) startTimestamp = timestamp;
-      const elapsed = timestamp - startTimestamp;
-      const p = Math.min(elapsed / duration, 1);
+    let cancelled = false;
+    let animId = null;
+    let scanTimer = null;
+    let scanPause = null;
+    let routePause = null;
+    let start = null;
 
-      setAnimationProgress(p);
+    const finish = () => {
+      phaseRef.current = 'done';
+      setPhase('done');
+      setProgress(1);
+      if (onCompleteRef.current) onCompleteRef.current();
+    };
 
-      if (p < 1) {
-        animId = requestAnimationFrame(step);
+    const startRoutePhase = (nextPhase) => {
+      if (cancelled) return;
+      phaseRef.current = nextPhase;
+      setPhase(nextPhase);
+      setProgress(0);
+      start = null;
+      animId = requestAnimationFrame(tickRoute);
+    };
+
+    const tickRoute = (timestamp) => {
+      if (cancelled) return;
+      if (!start) start = timestamp;
+
+      const elapsed = timestamp - start;
+      const raw = Math.min(elapsed / 2200, 1);
+      setProgress(easeInOutCubic(raw));
+
+      if (raw < 1) {
+        animId = requestAnimationFrame(tickRoute);
+      } else if (phaseRef.current === 'route1') {
+        routePause = setTimeout(() => startRoutePhase('route2'), 350);
       } else {
-        if (currentPhase === 'Ambulance to Patient') {
-          // Complete phase 1, reset timer, advance to phase 2
-          setCurrentPhase('Patient to Hospital');
-          setAnimationProgress(0);
-          startTimestamp = null;
-          animId = requestAnimationFrame(step);
-        } else {
-          // Finished both phases, callback to parent
-          if (onAnimationComplete) {
-            onAnimationComplete();
-          }
-        }
+        finish();
       }
     };
 
-    animId = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(animId);
-  }, [isAnimating, currentPhase, onAnimationComplete]);
+    if (dijkstraSteps.length > 0) {
+      phaseRef.current = 'scan';
+      setPhase('scan');
+      setProgress(0);
+      setScanStepIndex(0);
 
-  // Ambulance position coordinator
-  useEffect(() => {
-    if (isAnimating) {
-      const startNode = nodes.find(n => n.type === 'Ambulance');
-      const patientNode = activePatient ? nodeMap[activePatient.id] : null;
-      if (currentPhase === 'Ambulance to Patient' && startNode) {
-        setAnimatedAmbulancePos([startNode.lat, startNode.lng]);
-      } else if (currentPhase === 'Patient to Hospital' && patientNode) {
-        setAnimatedAmbulancePos([patientNode.lat, patientNode.lng]);
-      }
-      return;
+      let nextStep = 0;
+      const scanInterval = Math.max(260, Math.min(520, Math.floor(5600 / dijkstraSteps.length)));
+      scanTimer = setInterval(() => {
+        if (cancelled) return;
+        nextStep += 1;
+        if (nextStep < dijkstraSteps.length) {
+          setScanStepIndex(nextStep);
+        } else {
+          clearInterval(scanTimer);
+          scanPause = setTimeout(() => startRoutePhase('route1'), 500);
+        }
+      }, scanInterval);
+    } else {
+      startRoutePhase('route1');
     }
 
-    if (!routeResult) {
-      setAnimatedAmbulancePos(null);
-      return;
-    }
+    return () => {
+      cancelled = true;
+      clearInterval(scanTimer);
+      clearTimeout(scanPause);
+      clearTimeout(routePause);
+      if (animId) cancelAnimationFrame(animId);
+    };
+  }, [dijkstraSteps.length, isAnimating, routeResult]);
 
-    const { fullPath } = routeResult;
-    if (!fullPath || fullPath.length === 0) return;
+  const isScanning = phase === 'scan';
+  const isDriving = phase === 'route1' || phase === 'route2';
+  const isActive = isScanning || isDriving;
+  const activeStep = isScanning && dijkstraSteps.length > 0
+    ? dijkstraSteps[Math.min(scanStepIndex, dijkstraSteps.length - 1)]
+    : null;
+  const scanProgress = dijkstraSteps.length > 0 ? (scanStepIndex + 1) / dijkstraSteps.length : 0;
+  const displayProgress = isScanning ? scanProgress : progress;
 
-    let currentIndex = 0;
-    const pathCoords = fullPath.map(nodeId => {
-      const node = nodeMap[nodeId];
-      return node ? [node.lat, node.lng] : null;
-    }).filter(Boolean);
+  const seg1Progress = phase === 'route1' ? getProgressAlongPath(seg1Coords, progress) : null;
+  const seg2Progress = phase === 'route2' ? getProgressAlongPath(seg2Coords, progress) : null;
 
-    if (pathCoords.length === 0) return;
+  let ambulancePos = null;
+  if (isScanning && seg1Coords.length > 0) ambulancePos = seg1Coords[0];
+  else if (phase === 'route1' && seg1Progress?.head) ambulancePos = seg1Progress.head;
+  else if (phase === 'route2' && seg2Progress?.head) ambulancePos = seg2Progress.head;
+  else if (phase === 'done' && seg2Coords.length > 0) ambulancePos = seg2Coords[seg2Coords.length - 1];
+  else if (!isAnimating && routeResult) {
+    const lastId = routeResult.fullPath[routeResult.fullPath.length - 1];
+    const lastNode = nodeMap[lastId];
+    if (lastNode) ambulancePos = [lastNode.lat, lastNode.lng];
+  }
 
-    setAnimatedAmbulancePos(pathCoords[0]);
-
-    const interval = setInterval(() => {
-      currentIndex++;
-      if (currentIndex >= pathCoords.length) {
-        currentIndex = 0;
-      }
-      setAnimatedAmbulancePos(pathCoords[currentIndex]);
-    }, 1600);
-
-    return () => clearInterval(interval);
-  }, [routeResult, isAnimating, currentPhase, activePatient, nodes]);
-
-  // Compile active paths coordinates and tracking
-  const activePathsToDraw = [];
-  const visitedDuringAnim = new Set();
-
-  if (isAnimating) {
-    if (currentPhase === 'Ambulance to Patient') {
-      pathsToPatient.forEach(path => {
-        const { coords, head, cost, totalCost } = getPathProgress(path, nodeMap, edgeWeightMap, animationProgress);
-        activePathsToDraw.push({
-          path,
-          coords,
-          head,
-          cost,
-          totalCost,
-          isOptimal: path.join(',') === optimalSegment1.join(',')
-        });
-        
-        path.forEach((nodeId, idx) => {
-          if (idx < coords.length - 1) {
-            visitedDuringAnim.add(nodeId);
-          }
-        });
-      });
-    } else if (currentPhase === 'Patient to Hospital') {
-      pathsToHospital.forEach(path => {
-        const { coords, head, cost, totalCost } = getPathProgress(path, nodeMap, edgeWeightMap, animationProgress);
-        activePathsToDraw.push({
-          path,
-          coords,
-          head,
-          cost,
-          totalCost,
-          isOptimal: path.join(',') === optimalSegment2.join(',')
-        });
-
-        path.forEach((nodeId, idx) => {
-          if (idx < coords.length - 1) {
-            visitedDuringAnim.add(nodeId);
-          }
-        });
-      });
+  const selectedPathEdgeSet = new Set();
+  if (routeResult?.fullPath) {
+    for (let i = 0; i < routeResult.fullPath.length - 1; i += 1) {
+      selectedPathEdgeSet.add(edgeKey(routeResult.fullPath[i], routeResult.fullPath[i + 1]));
     }
   }
 
-  // Node status helper functions
-  const isVisitedNode = (nodeId) => {
-    if (!isAnimating) {
-      return routeResult && routeResult.fullPath.includes(nodeId);
-    }
-    if (currentPhase === 'Patient to Hospital' && optimalSegment1.includes(nodeId)) {
-      return true;
-    }
-    return visitedDuringAnim.has(nodeId);
-  };
+  const selectedPathNodeSet = new Set(!isScanning ? routeResult?.fullPath || [] : []);
+  const visitedNodeSet = new Set(activeStep?.visited || []);
+  const frontierNodeSet = new Set(activeStep?.evaluatingNeighbors || []);
 
-  const isCurrentNode = (nodeId) => {
-    if (!isAnimating) return false;
-    const activeOptimal = activePathsToDraw.find(ap => ap.isOptimal);
-    const optimalPath = currentPhase === 'Ambulance to Patient' ? optimalSegment1 : optimalSegment2;
-    const lastReachedIdx = activeOptimal ? activeOptimal.coords.length - 1 : 0;
-    if (optimalPath && lastReachedIdx < optimalPath.length) {
-      return optimalPath[lastReachedIdx] === nodeId;
-    }
-    return false;
-  };
+  const currentScanEdgeSet = new Set();
+  if (activeStep?.currentNode) {
+    (activeStep.evaluatingNeighbors || []).forEach((neighbor) => {
+      currentScanEdgeSet.add(edgeKey(activeStep.currentNode, neighbor));
+    });
+  }
 
-  const isFinalPathNode = (nodeId) => {
-    if (!routeResult || isAnimating) return false;
-    return routeResult.fullPath.includes(nodeId);
-  };
+  const evaluatedEdgeSet = new Set();
+  if (isScanning) {
+    dijkstraSteps.slice(0, scanStepIndex + 1).forEach((step) => {
+      (step.evaluatingNeighbors || []).forEach((neighbor) => {
+        evaluatedEdgeSet.add(edgeKey(step.currentNode, neighbor));
+      });
+    });
+  }
 
-  // Determine edge rendering options
   const getEdgeOptions = (edge) => {
-    const isPathEdge = routeResult && !isAnimating && (() => {
-      const { fullPath } = routeResult;
-      for (let i = 0; i < fullPath.length - 1; i++) {
-        if ((fullPath[i] === edge.from && fullPath[i+1] === edge.to) ||
-            (fullPath[i] === edge.to && fullPath[i+1] === edge.from)) {
-          return true;
-        }
-      }
-      return false;
-    })();
+    const key = edgeKey(edge.from, edge.to);
+    const isCurrentScanEdge = currentScanEdgeSet.has(key);
+    const isEvaluatedScanEdge = evaluatedEdgeSet.has(key);
+    const isOnSelectedPath = selectedPathEdgeSet.has(key);
 
-    let color = '#27272a'; // dark zinc default
-    let weight = 3;
-    let opacity = 0.4;
+    if (isCurrentScanEdge) {
+      return {
+        color: '#f59e0b',
+        weight: 6,
+        opacity: 0.95,
+        dashArray: '2,8',
+        lineCap: 'round',
+        lineJoin: 'round',
+        className: 'dijkstra-scan-edge'
+      };
+    }
+
+    if (isEvaluatedScanEdge) {
+      return {
+        color: '#a1a1aa',
+        weight: 4,
+        opacity: 0.7,
+        dashArray: '5,7',
+        lineCap: 'round',
+        lineJoin: 'round'
+      };
+    }
+
+    let color = '#27272a';
+    let weight = 2.5;
+    let opacity = 0.35;
     let dashArray = null;
-
     if (edge.traffic === 'Heavy') {
       color = '#f59e0b';
-      weight = 3.5;
-      opacity = 0.6;
+      weight = 3;
+      opacity = 0.55;
     } else if (edge.traffic === 'Gridlock') {
       color = '#ef4444';
-      weight = 4;
-      opacity = 0.7;
-      dashArray = '4, 8';
+      weight = 3.5;
+      opacity = 0.6;
+      dashArray = '4,8';
     }
 
-    if (isPathEdge) {
-      opacity = 0.15;
-    }
-
+    if (isOnSelectedPath && routeResult && !isActive) opacity = 0.12;
     return { color, weight, opacity, dashArray };
   };
 
+  const phaseLabel = isScanning
+    ? activeStep?.phase || 'Dijkstra Scan'
+    : phase === 'route1'
+      ? 'Selected: Unit -> Scene'
+      : phase === 'route2'
+        ? 'Selected: Scene -> Medical Center'
+        : 'Complete';
+
+  const distanceRows = Object.entries(activeStep?.distances || {})
+    .filter(([, value]) => Number.isFinite(value))
+    .sort((a, b) => a[1] - b[1])
+    .slice(0, 5);
+
   return (
     <div className="w-full h-full relative overflow-hidden flex flex-col">
-      {/* Telemetry Panel */}
       {activePatient && (
         <div className="absolute top-4 left-4 z-[1000] glass-panel p-5 rounded-xl max-w-sm w-full pointer-events-auto">
           <div className="flex items-center justify-between border-b border-charcoal-700/60 pb-3 mb-3.5">
             <div className="flex items-center gap-2">
               <div className="h-2 w-2 rounded-full bg-medical-blue animate-pulse" />
               <span className="text-[10px] font-bold text-charcoal-300 uppercase tracking-widest font-mono">
-                Tactical Routing Telemetry
+                Routing Telemetry
               </span>
             </div>
-            {routeResult && !isAnimating && (
+            {routeResult && !isActive && (
               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-medical-green/10 text-medical-green border border-medical-green/20 font-mono">
                 ROUTE OPTIMAL
+              </span>
+            )}
+            {isScanning && (
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-medical-amber/10 text-medical-amber border border-medical-amber/20 font-mono">
+                SCANNING
               </span>
             )}
           </div>
@@ -488,31 +423,51 @@ export default function MapPanel({
             {routeResult && (
               <div className="text-[11px] text-charcoal-300 space-y-1.5 border-t border-charcoal-700/40 pt-3">
                 <div className="flex justify-between">
-                  <span className="text-charcoal-400">Unit → Scene:</span>
+                  <span className="text-charcoal-400">{'Unit -> Scene:'}</span>
                   <span className="font-semibold text-white font-mono">{routeResult.segment1Distance} mins</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-charcoal-400">Scene → Clinic:</span>
+                  <span className="text-charcoal-400">{'Scene -> Clinic:'}</span>
                   <span className="font-semibold text-white font-mono">{routeResult.segment2Distance} mins</span>
                 </div>
               </div>
             )}
 
+            {isActive && (
+              <div className="space-y-1.5 border-t border-charcoal-700/40 pt-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] font-bold text-medical-blue font-mono uppercase tracking-wider flex items-center gap-1.5 min-w-0">
+                    <span className="h-1.5 w-1.5 rounded-full bg-medical-blue animate-ping shrink-0" />
+                    <span className="truncate">{phaseLabel}</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-charcoal-400 shrink-0">
+                    {Math.round(displayProgress * 100)}%
+                  </span>
+                </div>
+                <div className="w-full bg-charcoal-950 h-1.5 rounded-full overflow-hidden border border-charcoal-800">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-medical-blue to-medical-teal"
+                    style={{ width: `${displayProgress * 100}%`, transition: 'width 120ms linear' }}
+                  />
+                </div>
+              </div>
+            )}
+
             {routeResult && (
-              <div className="flex gap-2 pt-1 border-t border-charcoal-700/30 mt-3.5">
+              <div className="flex gap-2 pt-1 border-t border-charcoal-700/30 mt-1">
                 <button
                   onClick={onAnimate}
-                  disabled={isAnimating}
-                  className="flex-1 bg-medical-blue hover:bg-sky-500 disabled:bg-charcoal-700 text-charcoal-950 font-bold text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-medical-blue/15"
+                  disabled={isActive}
+                  className="flex-1 bg-medical-blue hover:bg-sky-500 disabled:bg-charcoal-700 disabled:text-charcoal-400 text-charcoal-950 font-bold text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition-all shadow-lg shadow-medical-blue/15"
                 >
                   <Play className="h-3.5 w-3.5 fill-current" />
-                  {isAnimating ? 'Analyzing Graph...' : 'Animate Pathfinding'}
+                  {isScanning ? 'Scanning Graph...' : isDriving ? 'Selecting Route...' : 'Animate Pathfinding'}
                 </button>
-                {onReset && !isAnimating && (
+                {onReset && !isActive && (
                   <button
                     onClick={onReset}
                     className="bg-charcoal-700 hover:bg-charcoal-600 border border-charcoal-600 text-charcoal-200 text-xs p-2 rounded-lg transition-all"
-                    title="Clear Active Route"
+                    title="Clear Route"
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
                   </button>
@@ -523,101 +478,81 @@ export default function MapPanel({
         </div>
       )}
 
-      {/* Dijkstra Simulation Overlay Panel */}
-      {isAnimating && (
+      {isScanning && activeStep && (
         <div className="absolute top-4 right-4 z-[1000] glass-panel p-4 rounded-xl max-w-xs w-full pointer-events-auto">
-          <div className="flex items-center gap-2 mb-2.5">
-            <span className="h-2 w-2 rounded-full bg-medical-blue animate-ping" />
-            <span className="text-[10px] font-bold text-medical-blue uppercase tracking-widest font-mono">
-              Tactical Router Active
+          <div className="flex items-center gap-2 mb-3">
+            <Route className="h-4 w-4 text-medical-amber" />
+            <span className="text-[10px] font-bold text-medical-amber uppercase tracking-widest font-mono">
+              Dijkstra Scan Active
             </span>
           </div>
-          <div className="space-y-3">
-            <div className="text-xs">
-              <span className="text-charcoal-400 text-[10px] uppercase font-mono block">Active Scan Phase</span>
-              <span className="text-white font-bold font-display mt-0.5 block">
-                {currentPhase === 'Ambulance to Patient' 
-                  ? 'Phase 1: Unit ➔ Triage Scene' 
-                  : 'Phase 2: Scene ➔ Medical Center'}
-              </span>
-            </div>
 
-            <div className="space-y-1">
-              <div className="flex justify-between text-[9px] font-mono text-charcoal-400">
-                <span>Search Progress</span>
-                <span>{Math.round(animationProgress * 100)}%</span>
+          <div className="space-y-3 text-xs">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-charcoal-900/70 border border-charcoal-800 rounded-lg p-2">
+                <span className="text-[9px] text-charcoal-400 uppercase font-mono block">Current Node</span>
+                <span className="font-bold text-white font-mono">{activeStep.currentNode}</span>
               </div>
-              <div className="w-full bg-charcoal-950 h-1.5 rounded-full overflow-hidden border border-charcoal-800">
-                <div 
-                  className="bg-medical-blue h-full transition-all duration-100"
-                  style={{ width: `${animationProgress * 100}%` }}
-                />
+              <div className="bg-charcoal-900/70 border border-charcoal-800 rounded-lg p-2">
+                <span className="text-[9px] text-charcoal-400 uppercase font-mono block">Settled</span>
+                <span className="font-bold text-white font-mono">{visitedNodeSet.size}/{nodes.length}</span>
               </div>
             </div>
 
-            <div className="border-t border-charcoal-700/50 pt-2.5 space-y-2">
-              <span className="text-[9px] font-bold text-charcoal-400 uppercase tracking-widest font-mono block">
-                Evaluating Branches ({currentPhase === 'Ambulance to Patient' ? pathsToPatient.length : pathsToHospital.length})
-              </span>
-              <div className="max-h-28 overflow-y-auto space-y-1.5 pr-1 font-mono text-[10px]">
-                {(currentPhase === 'Ambulance to Patient' ? pathsToPatient : pathsToHospital).map((path, idx) => {
-                  const optimalSeg = currentPhase === 'Ambulance to Patient' ? optimalSegment1 : optimalSegment2;
-                  const isOptimal = path.join(',') === optimalSeg.join(',');
-                  
-                  let pathWeight = 0;
-                  for (let i = 0; i < path.length - 1; i++) {
-                    pathWeight += edgeWeightMap[`${path[i]}-${path[i+1]}`] || 1;
-                  }
+            <div className="border-t border-charcoal-700/50 pt-2.5">
+              <span className="text-[9px] text-charcoal-400 uppercase font-mono block mb-1">Candidate Roads</span>
+              <p className="font-mono text-[11px] text-charcoal-200 leading-relaxed">
+                {(activeStep.evaluatingNeighbors || []).length > 0
+                  ? `${activeStep.currentNode} -> ${(activeStep.evaluatingNeighbors || []).join(', ')}`
+                  : 'No unvisited neighbors'}
+              </p>
+            </div>
 
-                  return (
-                    <div key={idx} className="flex items-center justify-between py-0.5">
-                      <span className="text-charcoal-300 truncate max-w-[130px]">
-                        {path.join('➔')}
-                      </span>
-                      <span className={`font-semibold shrink-0 ${
-                        isOptimal ? 'text-medical-green font-bold' : 'text-charcoal-500'
-                      }`}>
-                        {isOptimal ? `Optimal (${pathWeight}m)` : `Alt (${pathWeight}m)`}
-                      </span>
-                    </div>
-                  );
-                })}
+            <div className="border-t border-charcoal-700/50 pt-2.5">
+              <span className="text-[9px] text-charcoal-400 uppercase font-mono block mb-1">Lowest Known Costs</span>
+              <div className="space-y-1 font-mono text-[10px]">
+                {distanceRows.map(([id, value]) => (
+                  <div key={id} className="flex items-center justify-between">
+                    <span className={id === activeStep.currentNode ? 'text-medical-amber font-bold' : 'text-charcoal-300'}>
+                      {id}
+                    </span>
+                    <span className="text-white">{formatWeight(value)} mins</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Map Canvas */}
       <div className="flex-1 w-full h-full min-h-[400px] z-10">
-        <MapContainer 
-          center={center} 
-          zoom={zoom} 
+        <MapContainer
+          center={center}
+          zoom={zoom}
           style={{ width: '100%', height: '100%' }}
           zoomControl={false}
         >
           <MapController center={center} zoom={zoom} />
-          
+
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
             url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           />
 
-          {/* Road Network Edges */}
           {edges.map((edge, idx) => {
-            const fromNode = nodeMap[edge.from];
-            const toNode = nodeMap[edge.to];
-            if (!fromNode || !toNode) return null;
+            const from = nodeMap[edge.from];
+            const to = nodeMap[edge.to];
+            if (!from || !to) return null;
 
             return (
               <Polyline
                 key={`edge-${idx}`}
-                positions={[[fromNode.lat, fromNode.lng], [toNode.lat, toNode.lng]]}
+                positions={[[from.lat, from.lng], [to.lat, to.lng]]}
                 pathOptions={getEdgeOptions(edge)}
               >
                 <Tooltip sticky>
                   <div className="text-[11px] p-2 bg-charcoal-800 border border-charcoal-700 rounded-lg shadow-xl text-charcoal-200">
-                    <span className="font-bold text-white font-mono">{edge.from} ↔ {edge.to}</span>
+                    <span className="font-bold text-white font-mono">{edge.from}{' -> '}{edge.to}</span>
                     <div className="border-t border-charcoal-700/60 mt-1 pt-1 space-y-0.5">
                       <div>Weight: <span className="font-semibold text-white">{edge.weight} mins</span></div>
                       <div>Traffic: <span className={
@@ -631,145 +566,84 @@ export default function MapPanel({
             );
           })}
 
-          {/* Solid solved Segment 1 while Segment 2 is scanning */}
-          {isAnimating && currentPhase === 'Patient to Hospital' && optimalSegment1.length >= 2 && (() => {
-            const segment1Coords = optimalSegment1.map(id => {
-              const node = nodeMap[id];
-              return node ? [node.lat, node.lng] : null;
-            }).filter(Boolean);
-            
-            return (
+          {phase === 'route2' && seg1Coords.length >= 2 && (
+            <Polyline
+              positions={seg1Coords}
+              pathOptions={{ color: '#0ea5e9', weight: 5, opacity: 0.5, lineCap: 'round', lineJoin: 'round' }}
+            />
+          )}
+
+          {phase === 'route1' && seg1Progress && seg1Progress.trail.length >= 2 && (
+            <>
               <Polyline
-                positions={segment1Coords}
-                pathOptions={{
-                  color: '#0ea5e9',
-                  weight: 5,
-                  opacity: 0.6,
-                  lineCap: 'round',
-                  lineJoin: 'round'
-                }}
+                positions={seg1Progress.trail}
+                pathOptions={{ color: '#0ea5e9', weight: 5, opacity: 0.7, lineCap: 'round', lineJoin: 'round', className: 'neon-path-glowing' }}
               />
-            );
-          })()}
-
-          {/* Real-time Multi-Path Dijkstra Scan Wavefronts */}
-          {isAnimating && activePathsToDraw.map((ap, idx) => (
-            <React.Fragment key={`anim-path-${idx}`}>
               <Polyline
-                positions={ap.coords}
-                pathOptions={{
-                  color: ap.isOptimal ? '#0ea5e9' : '#52525b',
-                  weight: ap.isOptimal ? 4.5 : 2,
-                  opacity: ap.isOptimal ? 0.95 : 0.45,
-                  dashArray: '3, 5'
-                }}
+                positions={seg1Progress.trail}
+                pathOptions={{ color: '#ffffff', weight: 2, opacity: 0.8, lineCap: 'round', lineJoin: 'round' }}
               />
-              {ap.head && (
-                <Marker
-                  position={ap.head}
-                  icon={L.divIcon({
-                    html: `
-                      <div class="animate-pulse" style="
-                        width: 10px;
-                        height: 10px;
-                        background: ${ap.isOptimal ? '#0ea5e9' : '#a1a1aa'};
-                        border: 2px solid #ffffff;
-                        border-radius: 50%;
-                        box-shadow: 0 0 10px ${ap.isOptimal ? '#0ea5e9' : '#a1a1aa'};
-                      "></div>
-                    `,
-                    className: 'wavefront-marker',
-                    iconSize: [10, 10],
-                    iconAnchor: [5, 5]
-                  })}
-                />
-              )}
-              {ap.head && (
-                <Tooltip
-                  position={ap.head}
-                  permanent
-                  direction="top"
-                  className="custom-cost-tooltip"
-                >
-                  <div className="font-mono text-[9px] font-bold text-white bg-charcoal-900/95 px-1 py-0.5 rounded border border-charcoal-700/60 shadow-lg select-none">
-                    {Math.round(ap.cost)}m
-                  </div>
-                </Tooltip>
-              )}
-            </React.Fragment>
-          ))}
+            </>
+          )}
 
-          {/* Final Glowing Shortest Path Polyline */}
-          {routeResult && !isAnimating && (() => {
-            const { fullPath } = routeResult;
-            const pathCoords = fullPath.map(nodeId => {
-              const node = nodeMap[nodeId];
-              return node ? [node.lat, node.lng] : null;
-            }).filter(Boolean);
+          {phase === 'route2' && seg2Progress && seg2Progress.trail.length >= 2 && (
+            <>
+              <Polyline
+                positions={seg2Progress.trail}
+                pathOptions={{ color: '#10b981', weight: 5, opacity: 0.7, lineCap: 'round', lineJoin: 'round', className: 'neon-path-glowing' }}
+              />
+              <Polyline
+                positions={seg2Progress.trail}
+                pathOptions={{ color: '#ffffff', weight: 2, opacity: 0.8, lineCap: 'round', lineJoin: 'round' }}
+              />
+            </>
+          )}
 
-            if (pathCoords.length < 2) return null;
-
+          {routeResult && !isActive && (() => {
+            const all = toCoords(routeResult.fullPath);
+            if (all.length < 2) return null;
             return (
               <>
-                {/* Thick Blue Glow Underlay */}
                 <Polyline
-                  positions={pathCoords}
-                  pathOptions={{
-                    color: '#0ea5e9',
-                    weight: 7,
-                    opacity: 0.55,
-                    lineCap: 'round',
-                    lineJoin: 'round',
-                    className: 'neon-path-glowing'
-                  }}
+                  positions={all}
+                  pathOptions={{ color: '#0ea5e9', weight: 6, opacity: 0.5, lineCap: 'round', lineJoin: 'round', className: 'neon-path-glowing' }}
                 />
-                {/* Dotted Moving overlay */}
                 <Polyline
-                  positions={pathCoords}
-                  pathOptions={{
-                    color: '#ffffff',
-                    weight: 2.5,
-                    opacity: 0.9,
-                    lineCap: 'round',
-                    lineJoin: 'round',
-                    className: 'neon-path'
-                  }}
+                  positions={all}
+                  pathOptions={{ color: '#ffffff', weight: 2.5, opacity: 0.85, lineCap: 'round', lineJoin: 'round', className: 'neon-path' }}
                 />
               </>
             );
           })()}
 
-          {/* Map Node Markers */}
-          {nodes.map((node) => {
-            const isCurrent = isCurrentNode(node.id);
-            const isVisited = isVisitedNode(node.id);
-            const isPathNode = isFinalPathNode(node.id);
-
-            return (
-              <Marker
-                key={node.id}
-                position={[node.lat, node.lng]}
-                icon={createNodeIcon(node.type, node.name, isCurrent, isVisited, isPathNode)}
-              >
-                <Popup>
-                  <div className="text-[11px] p-2 text-charcoal-300 font-sans">
-                    <h4 className="font-bold text-white text-xs font-display">{node.name}</h4>
-                    <div className="border-t border-charcoal-700/60 mt-1 pt-1 space-y-0.5 font-mono">
-                      <div>Node ID: <span className="text-white">{node.id}</span></div>
-                      <div>Class: <span className="text-white">{node.type}</span></div>
-                      <div>Coords: {node.lat.toFixed(4)}, {node.lng.toFixed(4)}</div>
-                    </div>
+          {nodes.map((node) => (
+            <Marker
+              key={node.id}
+              position={[node.lat, node.lng]}
+              icon={createNodeIcon(node.type, {
+                isOnPath: selectedPathNodeSet.has(node.id),
+                isVisited: visitedNodeSet.has(node.id),
+                isCurrent: activeStep?.currentNode === node.id,
+                isFrontier: frontierNodeSet.has(node.id)
+              })}
+            >
+              <Popup>
+                <div className="text-[11px] p-2 text-charcoal-300 font-sans">
+                  <h4 className="font-bold text-white text-xs font-display">{node.name}</h4>
+                  <div className="border-t border-charcoal-700/60 mt-1 pt-1 space-y-0.5 font-mono">
+                    <div>Node ID: <span className="text-white">{node.id}</span></div>
+                    <div>Class: <span className="text-white">{node.type}</span></div>
+                    <div>Coords: {node.lat.toFixed(4)}, {node.lng.toFixed(4)}</div>
                   </div>
-                </Popup>
-              </Marker>
-            );
-          })}
+                </div>
+              </Popup>
+            </Marker>
+          ))}
 
-          {/* Moving Ambulance Driving Car Marker */}
-          {animatedAmbulancePos && (
-            <Marker 
-              position={animatedAmbulancePos} 
-              icon={createAmbulanceCarIcon()}
+          {ambulancePos && (
+            <Marker
+              position={ambulancePos}
+              icon={ambulanceCarIcon}
               zIndexOffset={5000}
             >
               <Popup>
@@ -778,7 +652,9 @@ export default function MapPanel({
                     <Truck className="h-3.5 w-3.5" />
                     Ambulance Alpha
                   </span>
-                  <p className="text-[10px] text-charcoal-300 mt-0.5">En route along calculated path...</p>
+                  <p className="text-[10px] text-charcoal-300 mt-0.5">
+                    {isScanning ? 'Waiting during graph scan' : isDriving ? 'En route' : 'Stationed'}
+                  </p>
                 </div>
               </Popup>
             </Marker>
@@ -786,7 +662,6 @@ export default function MapPanel({
         </MapContainer>
       </div>
 
-      {/* Streamlined Bottom Legend */}
       <div className="bg-charcoal-900 border-t border-charcoal-800 p-4 px-6 flex flex-col sm:flex-row gap-3 items-center justify-between text-xs text-charcoal-300 font-mono">
         <div className="flex flex-wrap gap-x-6 gap-y-2 items-center">
           <div className="flex items-center gap-1.5">
@@ -814,8 +689,13 @@ export default function MapPanel({
             <span className="w-3.5 h-0.5 bg-medical-red rounded" />
             <span>Gridlock</span>
           </div>
+          <div className="h-4 w-px bg-charcoal-700 hidden sm:block" />
+          <div className="flex items-center gap-1.5 text-medical-amber font-semibold">
+            <span className="w-2.5 h-2.5 rounded-full bg-medical-amber border border-white" />
+            <span>Dijkstra Check</span>
+          </div>
         </div>
-        
+
         <span className="text-[10px] text-charcoal-400 font-semibold tracking-wider uppercase">
           OpenStreetMap Wrapper Engine
         </span>

@@ -36,7 +36,7 @@
   font-family: 'Inter', -apple-system, sans-serif;
 }
 
-/* Medical Neon Path Animation */
+/* Medical Neon Path Animation — marching ants on solved path */
 .neon-path {
   stroke-dasharray: 6, 10;
   animation: dash 35s linear infinite;
@@ -49,7 +49,7 @@
   stroke-linejoin: round;
 }
 
-/* Minimalist Pulse Ring for Patients */
+/* Minimalist Pulse Ring for Patient Markers */
 .pulse-marker {
   position: relative;
 }
@@ -107,4 +107,35 @@
 }
 .custom-cost-tooltip::before {
   display: none !important;
+}
+
+/* Leaflet marker transitions for smooth node state changes */
+.custom-leaflet-marker {
+  transition: transform 0.2s ease;
+}
+
+/* Ambulance marker — no leaflet default icon styles */
+.custom-ambulance-car {
+  background: transparent !important;
+  border: none !important;
+}
+
+.dijkstra-current-marker {
+  animation: dijkstra-current-pulse 0.9s ease-in-out infinite alternate;
+}
+
+.dijkstra-scan-edge {
+  animation: dash 1.4s linear infinite;
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.6));
+}
+
+@keyframes dijkstra-current-pulse {
+  from {
+    transform: scale(1);
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.45);
+  }
+  to {
+    transform: scale(1.25);
+    box-shadow: 0 0 18px rgba(245, 158, 11, 0.9);
+  }
 }
