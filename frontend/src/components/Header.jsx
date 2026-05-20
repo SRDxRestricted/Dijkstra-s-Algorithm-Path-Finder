@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Shield, User, LogOut, LogIn, ChevronDown, Check, Activity } from 'lucide-react';
 
 export default function Header({ 
@@ -10,10 +10,16 @@ export default function Header({
   onLogout,
   isAnimating 
 }) {
-  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(!user);
   const [username, setUsername] = useState('responder.alpha');
   const [password, setPassword] = useState('••••••••');
   const [showDropdown, setShowDropdown] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      setShowAuthModal(true);
+    }
+  }, [user]);
 
   const handleSubmit = (e) => {
     e.preventDefault();

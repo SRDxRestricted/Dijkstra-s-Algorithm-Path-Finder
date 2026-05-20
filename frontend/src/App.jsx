@@ -13,11 +13,10 @@ export default function App() {
   const [routeResult, setRouteResult] = useState(null);
   
   // Shift Rider Auth State
-  const [user, setUser] = useState({ name: 'Officer Sterling', id: 'RIDER-402', station: 'Alpha Station' });
+  const [user, setUser] = useState(null);
   
   // Animation states
   const [isAnimating, setIsAnimating] = useState(false);
-  const [animationStep, setAnimationStep] = useState(null);
   
   // Loading & error states
   const [isLoading, setIsLoading] = useState(true);
@@ -53,7 +52,6 @@ export default function App() {
         setActivePatient(null);
         setRouteResult(null);
         setIsAnimating(false);
-        setAnimationStep(null);
 
         const details = await fetchScenarioDetails(activeScenarioId);
         setActiveScenario(details);
@@ -73,7 +71,6 @@ export default function App() {
     
     // Reset routing states
     setRouteResult(null);
-    setAnimationStep(null);
     setActivePatient(patient);
 
     try {
@@ -87,29 +84,18 @@ export default function App() {
 
   // Run Dijkstra simulation loop
   const handleAnimatePathfinding = () => {
-    if (!routeResult || !routeResult.steps || routeResult.steps.length === 0 || isAnimating) return;
-
+    if (!routeResult || isAnimating) return;
     setIsAnimating(true);
-    let stepIndex = 0;
-    const steps = routeResult.steps;
+  };
 
-    const interval = setInterval(() => {
-      if (stepIndex < steps.length) {
-        setAnimationStep(steps[stepIndex]);
-        stepIndex++;
-      } else {
-        clearInterval(interval);
-        setIsAnimating(false);
-        setAnimationStep(null);
-      }
-    }, 220); // 220ms expansion delay
+  const handleAnimationComplete = () => {
+    setIsAnimating(false);
   };
 
   const handleResetRoute = () => {
     setActivePatient(null);
     setRouteResult(null);
     setIsAnimating(false);
-    setAnimationStep(null);
   };
 
   return (
@@ -173,9 +159,9 @@ export default function App() {
                 activePatient={activePatient}
                 routeResult={routeResult}
                 isAnimating={isAnimating}
-                animationStep={animationStep}
                 onAnimate={handleAnimatePathfinding}
                 onReset={handleResetRoute}
+                onAnimationComplete={handleAnimationComplete}
               />
             )}
           </div>

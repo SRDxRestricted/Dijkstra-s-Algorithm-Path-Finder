@@ -97,3 +97,14 @@
 .active-card-shadow {
   box-shadow: 0 0 15px rgba(14, 165, 233, 0.08);
 }
+
+/* Custom Cost Tooltip for pathfinding weights */
+.custom-cost-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.custom-cost-tooltip::before {
+  display: none !important;
+}
