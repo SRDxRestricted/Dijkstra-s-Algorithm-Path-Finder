@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, User, LogOut, LogIn, ChevronDown, Check, Activity } from 'lucide-react';
+import { Shield, User, LogOut, LogIn, ChevronDown, Check, Activity, FlaskConical } from 'lucide-react';
+import DijkstraIllustration from './DijkstraIllustration';
 
 export default function Header({ 
   scenarios, 
@@ -14,6 +15,7 @@ export default function Header({
   const [username, setUsername] = useState('responder.alpha');
   const [password, setPassword] = useState('••••••••');
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showIllustration, setShowIllustration] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -28,6 +30,8 @@ export default function Header({
   };
 
   return (
+    <>
+    {showIllustration && <DijkstraIllustration onClose={() => setShowIllustration(false)} />}
     <header className="border-b border-charcoal-700 bg-charcoal-900 px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 z-40 relative">
       {/* Branding & Status */}
       <div className="flex items-center gap-3">
@@ -49,22 +53,32 @@ export default function Header({
         </div>
       </div>
 
-      {/* Tabbed Scenario Switcher */}
-      <div className="flex bg-charcoal-950 border border-charcoal-700/80 rounded-lg p-1 self-center">
-        {scenarios.map((sc) => (
-          <button
-            key={sc.id}
-            onClick={() => onSelectScenario(sc.id)}
-            disabled={isAnimating}
-            className={`px-4 py-2 rounded-md text-xs font-semibold tracking-wide transition-all duration-200 ${
-              activeScenarioId === sc.id
-                ? 'bg-charcoal-700 text-white font-bold border border-charcoal-600/50 shadow-inner'
-                : 'text-charcoal-400 hover:text-charcoal-200 hover:bg-charcoal-900/40 disabled:opacity-40'
-            }`}
-          >
-            Scenario {sc.id}
-          </button>
-        ))}
+      {/* Tabbed Scenario Switcher + Illustrate button */}
+      <div className="flex items-center gap-2 self-center">
+        <div className="flex bg-charcoal-950 border border-charcoal-700/80 rounded-lg p-1">
+          {scenarios.map((sc) => (
+            <button
+              key={sc.id}
+              onClick={() => onSelectScenario(sc.id)}
+              disabled={isAnimating}
+              className={`px-4 py-2 rounded-md text-xs font-semibold tracking-wide transition-all duration-200 ${
+                activeScenarioId === sc.id
+                  ? 'bg-charcoal-700 text-white font-bold border border-charcoal-600/50 shadow-inner'
+                  : 'text-charcoal-400 hover:text-charcoal-200 hover:bg-charcoal-900/40 disabled:opacity-40'
+              }`}
+            >
+              Scenario {sc.id}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => setShowIllustration(true)}
+          title="Illustrate Dijkstra's Algorithm"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-semibold transition-all"
+        >
+          <FlaskConical className="h-3.5 w-3.5" />
+          Illustrate
+        </button>
       </div>
 
       {/* Ambulance Rider Auth Control */}
@@ -172,5 +186,6 @@ export default function Header({
         </div>
       )}
     </header>
+    </>
   );
 }
